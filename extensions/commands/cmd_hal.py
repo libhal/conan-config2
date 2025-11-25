@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @conan_subcommand()
-def hal_setup(conan_api: ConanAPI):
+def hal_setup(conan_api: ConanAPI, parser, subparser, *args):
     """
     Set up libhal development environment (remotes + profiles)
     """
