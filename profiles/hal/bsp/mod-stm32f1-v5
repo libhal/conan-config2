@@ -1,0 +1,10 @@
+[settings]
+build_type=Release
+os=baremetal
+arch=cortex-m3
+
+[options]
+*:platform=micromod
+*:micromod_board=mod-stm32f1-v5
+libhal-arm-mcu/*:platform=stm32f103c8
+*:default_specs=False
