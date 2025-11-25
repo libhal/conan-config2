@@ -15,7 +15,8 @@
 # limitations under the License.
 
 import logging
-import platform
+import os
+import subprocess
 from pathlib import Path
 from typing import List, Optional
 from conan.api.conan_api import ConanAPI
@@ -23,173 +24,6 @@ from conan.api.model import Remote
 from conan.cli.command import conan_command, conan_subcommand
 
 logger = logging.getLogger(__name__)
-
-
-class Profile:
-    """
-    Represents a Conan profile with a name and content.
-    """
-
-    def __init__(self, name: str, content: str, build_dir: Optional[Path] = None):
-        self.name = name
-        self.content = content
-        self._build_dir = build_dir
-
-    def set_build_dir(self, build_dir: Path) -> None:
-        """Set the build directory for this profile"""
-        self._build_dir = build_dir
-
-    def build_dir(self) -> Path:
-        """Get the build directory for this profile"""
-        if self._build_dir is None:
-            raise ValueError(
-                f"No build directory set for profile '{self.name}'. "
-                "Set it via set_build_dir() or during initialization")
-        return self._build_dir / self.name
-
-    def profile_path(self) -> Path:
-        """Get the profile file path for this profile"""
-        return self.build_dir() / 'profile'
-
-    def log_file(self) -> Path:
-        """Get the log file path for this profile"""
-        return self.build_dir() / 'log'
-
-
-class BuildProfileResult:
-    """
-    Represents the result of building a profile.
-    """
-
-    def __init__(self, profile_name: str, success: bool, log_file: Optional[Path]):
-        self.profile_name = profile_name
-        self.success = success
-        self.log_file = log_file
-
-
-def generate_arm_cortex_m_profiles() -> List[Profile]:
-    """
-    Generate all possible profile combinations for ARM GCC toolchains
-
-    Returns:
-        List[Profile]: List of Profile objects containing profile configurations
-    """
-    compilers = {
-        "gcc": {
-            'package': 'arm-gnu-toolchain',
-            'versions': ['14.2']
-        }
-        # We plan to support LLVM at some future point
-    }
-
-    # Architectures can be either strings or tuples (arch_name, min_version)
-    # Tuple format: (architecture_name, minimum_compiler_version)
-    architectures = [
-        'cortex-m0',
-        'cortex-m0plus',
-        'cortex-m1',
-        'cortex-m3',
-        'cortex-m4',
-        'cortex-m4f',
-        'cortex-m7',  # comment these out later
-        'cortex-m7f',  # comment these out later
-        'cortex-m7d',  # comment these out later
-        'cortex-m23',  # comment these out later
-        'cortex-m33',  # comment these out later
-        'cortex-m33f',  # comment these out later
-        'cortex-m35pf',  # comment these out later
-        'cortex-m55',  # comment these out later
-        ('cortex-m85', '13.2'),  # comment these out later
-    ]
-
-    build_types = [
-        'Debug',
-        'Release',
-        'MinSizeRel',
-    ]
-
-    def version_compare(v1: str, v2: str) -> int:
-        """Compare two version strings. Returns -1 if v1 < v2, 0 if equal, 1 if v1 > v2"""
-        v1_parts = [int(x) for x in v1.split('.')]
-        v2_parts = [int(x) for x in v2.split('.')]
-
-        for i in range(max(len(v1_parts), len(v2_parts))):
-            part1 = v1_parts[i] if i < len(v1_parts) else 0
-            part2 = v2_parts[i] if i < len(v2_parts) else 0
-            if part1 < part2:
-                return -1
-            elif part1 > part2:
-                return 1
-        return 0
-
-    profiles: List[Profile] = []
-    for compiler, compiler_config in compilers.items():
-        compiler_package = compiler_config['package']
-        for arch_entry in architectures:
-            # Check if this is a tuple with minimum version requirement
-            if isinstance(arch_entry, tuple):
-                arch, min_version = arch_entry
-            else:
-                arch = arch_entry
-                min_version = None
-
-            for version in compiler_config['versions']:
-                # Skip if compiler version doesn't meet minimum requirement
-                if min_version and version_compare(version, min_version) < 0:
-                    continue
-
-                for build_type in build_types:
-                    NAME = f"{arch}-{compiler}-{version}-{build_type}"
-                    TEXT = f"""[settings]
-os=baremetal
-arch={arch}
-compiler={compiler}
-compiler.version={version}
-compiler.libcxx=libstdc++11
-compiler.cppstd=23
-build_type={build_type}
-
-[tool_requires]
-{compiler_package}/{version}"""
-
-                    profiles.append(Profile(NAME, TEXT))
-
-    return profiles
-
-
-def generate_all_profiles():
-    """
-    Generate all possible profile combinations for ARM GCC toolchains
-
-    Returns:
-        list: List of dictionaries containing profile configurations
-              Each dict has keys: arch, compiler, compiler_version, compiler_package, os
-    """
-    arm_cortex_m_profiles = generate_arm_cortex_m_profiles()
-    return arm_cortex_m_profiles
-
-
-@conan_subcommand()
-def hal_new(conan_api: ConanAPI, parser, subparser, *args):
-    """
-    Create a new libhal project, library, platform, or board
-    """
-    subparser.add_argument('type', choices=['project', 'library', 'platform', 'board'],
-                           help='Type of item to create')
-    subparser.add_argument('name', help='Name of the new item')
-    subparser.add_argument('--template', help='Template to use')
-    args = parser.parse_args(*args)
-
-    logger.info(f"Creating new {args.type}: {args.name}")
-    logger.info("TODO: Implement new command")
-
-
-def remote_exists(conan_api: ConanAPI, remote_name: str):
-    try:
-        conan_api.remotes.get(remote_name)
-        return True
-    except Exception:
-        return False
 
 
 @conan_subcommand()
@@ -206,6 +40,13 @@ def hal_setup(conan_api: ConanAPI):
     logger.info("\n📦 Adding libhal-trunk to conan remotes...")
     REPO_REMOTE = Remote(REMOTE_NAME, REPO)
     logger.debug(f"Remote URL: {REPO}")
+
+    def remote_exists(conan_api: ConanAPI, remote_name: str):
+        try:
+            conan_api.remotes.get(remote_name)
+            return True
+        except Exception:
+            return False
 
     try:
         if remote_exists(conan_api, REMOTE_NAME):
@@ -226,14 +67,66 @@ def hal_setup(conan_api: ConanAPI):
 
 
 @conan_subcommand()
+def hal_update(conan_api: ConanAPI, parser, subparser, *args):
+    """
+    Update the libhal conan configuration to the latest version
+    """
+
+    subparser.add_argument('--tag',
+                           help='Specific release tag to install (optional)')
+    args = parser.parse_args(*args)
+
+    logger.info("📥 Updating libhal conan configuration...")
+
+    # Build the conan config install command
+    CONFIG_URL = 'https://github.com/libhal/conan-config2.git'
+    cmd = ['conan', 'config', 'install', CONFIG_URL]
+
+    # Add tag argument if specified
+    if args.tag:
+        cmd.extend(['--args', f'branch={args.tag}'])
+        logger.info(f"Installing from: {CONFIG_URL} (tag: {args.tag})")
+    else:
+        logger.info(f"Installing from: {CONFIG_URL} (latest)")
+    try:
+        # Run the command
+        logger.debug(cmd)
+        result = subprocess.run(cmd, timeout=60)
+        if result.returncode == 0:
+            logger.info("✅ Configuration updated successfully!")
+        else:
+            logger.error("❌ Failed to update configuration")
+            return 1
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Update timed out after 60 seconds")
+        return 1
+    except Exception as e:
+        logger.error(f"❌ Error during update: {e}")
+        return 1
+
+    return 0
+
+
+@conan_subcommand()
+def hal_new(conan_api: ConanAPI, parser, subparser, *args):
+    """
+    Create a new libhal project, library, platform, or board
+    """
+    subparser.add_argument('type', choices=['project', 'library', 'platform', 'board'],
+                           help='Type of item to create')
+    subparser.add_argument('name', help='Name of the new item')
+    subparser.add_argument('--template', help='Template to use')
+    args = parser.parse_args(*args)
+
+    logger.info(f"Creating new {args.type}: {args.name}")
+    logger.info("TODO: Implement new command")
+
+
+@conan_subcommand()
 def hal_build_matrix(conan_api: ConanAPI, parser, subparser, *args):
     """
     Build against multiple architecture/compiler profile combinations
     """
-    import os
-    import subprocess
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import threading
 
     subparser.add_argument('path', nargs='?', default='.',
                            help='Path to build (default: current directory)')
@@ -243,163 +136,13 @@ def hal_build_matrix(conan_api: ConanAPI, parser, subparser, *args):
                            help=f'Number of parallel builds (default: {os.cpu_count()})')
     args = parser.parse_args(*args)
 
-    # Get all profiles
-    profiles = generate_all_profiles()
-    total_profiles = len(profiles)
+    # The code below will be brought back if suitable use cases arise like
+    # developers wanting to build against all. I'd prefer if the set of build
+    # host targets were defined by the profiles in this conan config rather
+    # than manually generated
+    logger.info("TODO: Implement build matrix command")
 
-    logger.info(f"Building {total_profiles} profile combinations...")
-    logger.info(f"Using {args.jobs} parallel jobs")
-
-    # Create build-matrix directory for logs
-    BUILD_PATH: Path = Path(args.path).resolve()
-
-    # Check for conanfile.py existence
-    if not (BUILD_PATH / "conanfile.py").exists():
-        logger.error(f"❌ No conanfile.py found in {BUILD_PATH}")
-        logger.error(
-            "Please ensure you're running this command in a directory with a 'conanfile.py' file")
-        return 1
-
-    BUILD_DIR: Path = BUILD_PATH / "build-matrix"
-    BUILD_DIR.mkdir(exist_ok=True)
-    logger.info(f"Binaries will be written to: {BUILD_DIR}")
-
-    # Track progress
-    completed_count = 0
-    failed_builds = []
-    lock = threading.Lock()
-
-    logging.debug(f"PROFILE_BUILD_DIR={BUILD_DIR}")
-
-    # Sequential install to avoid CMakePresets.json & compile_commands.json
-    # collision
-    for profile in profiles:
-        profile.set_build_dir(BUILD_DIR)
-        PROFILE_BUILD_DIR = BUILD_DIR / profile.name
-
-        logging.debug(f"PROFILE_PATH={profile.profile_path()}")
-        logging.debug(f"LOG_FILE={profile.log_file()}")
-
-        PROFILE_BUILD_DIR.mkdir(exist_ok=True)
-        Path(profile.profile_path()).write_text(profile.content)
-
-        logging.info(f"⚙️ Running Conan Install: {profile.name}")
-        subprocess.run(
-            ['conan', 'install', '.', '-pr',
-                str(profile.profile_path().resolve())],
-            capture_output=True,
-            check=True,
-            timeout=30
-        )
-
-    def build_profile(profile: Profile) -> BuildProfileResult:
-        """Build a single profile and return result"""
-        nonlocal completed_count
-
-        LOG_FILE = profile.log_file()
-
-        COMMAND = ['conan', 'build', str(BUILD_PATH),
-                   '-pr', str(profile.profile_path().resolve()),
-                   '-of', str(profile.build_dir().resolve())]
-        try:
-            # Run conan build command
-            result = subprocess.run(COMMAND,
-                                    capture_output=True,
-                                    text=True,
-                                    # 5 minute timeout per build
-                                    timeout=300)
-
-            # Write logs
-            log_content = f"Command: {' '.join(COMMAND)}\n"
-            log_content += f"Return code: {result.returncode}\n\n"
-            log_content += "=== STDOUT ===\n"
-            log_content += result.stdout
-            log_content += "\n=== STDERR ===\n"
-            log_content += result.stderr
-            LOG_FILE.write_text(log_content)
-
-            # Update progress
-            with lock:
-                completed_count += 1
-                if result.returncode == 0:
-                    logger.info(
-                        f"✅ [{completed_count}/{total_profiles}] {profile.name}")
-                    return BuildProfileResult(profile.name, True, None)
-                else:
-                    logger.error(
-                        f"❌ [{completed_count}/{total_profiles}] {profile.name}")
-                    return BuildProfileResult(profile.name, False, LOG_FILE)
-
-        except subprocess.TimeoutExpired:
-            with lock:
-                completed_count += 1
-                logger.error(
-                    f"‼️⏱️[{completed_count}/{total_profiles}] {profile.name} TIMEOUT")
-                LOG_FILE.write_text(f"Build timed out after 600 seconds")
-                return BuildProfileResult(profile.name, False, LOG_FILE)
-        except Exception as e:
-            with lock:
-                completed_count += 1
-                logger.error(
-                    f"‼️ [{completed_count}/{total_profiles}] {profile.name} ERROR: {e}")
-                LOG_FILE.write_text(f"Build error: {e}")
-                return BuildProfileResult(profile.name, False, LOG_FILE)
-
-    # Execute builds in parallel using ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        # Submit all build jobs
-        future_to_profile = {executor.submit(
-            build_profile, profile): profile for profile in profiles}
-
-        # Collect results as they complete
-        for future in as_completed(future_to_profile):
-            result = future.result()
-            if not result.success:
-                failed_builds.append(result)
-
-    # Summary
-    logger.info(f"\n{'='*60}")
-    logger.info(
-        f"Build Matrix Complete: {completed_count}/{total_profiles} profiles processed")
-    logger.info(f"Successful: {completed_count - len(failed_builds)}")
-    logger.info(f"Failed: {len(failed_builds)}")
-
-    if failed_builds:
-        logger.error("\nFailed builds:")
-        for result in failed_builds:
-            logger.error(f"  - {result.profile_name}: {result.log_file}")
-        return 1
-    else:
-        logger.info("\nAll builds successful!")
-        return 0
-
-
-@conan_subcommand()
-def hal_deploy(conan_api: ConanAPI, parser, subparser, *args):
-    """
-    Build and create packages for deployment
-    """
-    subparser.add_argument('--remote', help='Remote to deploy to')
-    subparser.add_argument('--profile', help='Profile to use')
-    args = parser.parse_args(*args)
-
-    logger.info("Deploying packages...")
-    logger.info("TODO: Implement deploy command")
-
-
-@conan_subcommand()
-def hal_profiles(conan_api: ConanAPI, parser, subparser, *args):
-    """
-    Manage libhal profiles
-    """
-    subparser.add_argument('action',
-                           choices=['list', 'show', 'create', 'delete'],
-                           help='Action to perform')
-    subparser.add_argument('--name', help='Profile name')
-    args = parser.parse_args(*args)
-
-    logger.info("Managing profiles...")
-    logger.info("TODO: Implement profiles command")
+    return 0
 
 
 @conan_subcommand()
@@ -447,57 +190,6 @@ def hal_debug(conan_api: ConanAPI, parser, subparser, *args):
     logger.info("TODO: Implement debug command")
 
 
-@conan_subcommand()
-def hal_update(conan_api: ConanAPI, parser, subparser, *args):
-    """
-    Update the libhal conan configuration to the latest version
-    """
-    import subprocess
-
-    subparser.add_argument('--tag',
-                           help='Specific release tag to install (optional)')
-    args = parser.parse_args(*args)
-
-    logger.info("📥 Updating libhal conan configuration...")
-
-    try:
-        # Build the conan config install command
-        config_url = 'https://github.com/libhal/conan-config.git'
-        cmd = ['conan', 'config', 'install', config_url]
-
-        # Add tag argument if specified
-        if args.tag:
-            cmd.extend(['--args', f'branch={args.tag}'])
-            logger.info(f"Installing from: {config_url} (tag: {args.tag})")
-        else:
-            logger.info(f"Installing from: {config_url} (latest)")
-
-        # Run the command
-        result = subprocess.run(cmd,
-                                capture_output=True,
-                                text=True,
-                                timeout=60)
-
-        if result.returncode == 0:
-            logger.info("✅ Configuration updated successfully!")
-            if result.stdout:
-                logger.debug(f"Output: {result.stdout}")
-        else:
-            logger.error("❌ Failed to update configuration")
-            if result.stderr:
-                logger.error(f"Error: {result.stderr}")
-            return 1
-
-    except subprocess.TimeoutExpired:
-        logger.error("❌ Update timed out after 60 seconds")
-        return 1
-    except Exception as e:
-        logger.error(f"❌ Error during update: {e}")
-        return 1
-
-    return 0
-
-
 @conan_command(group="libhal")
 def hal(conan_api: ConanAPI, parser, *args):
     """
@@ -511,7 +203,7 @@ def hal(conan_api: ConanAPI, parser, *args):
     parser.add_argument(
         '--version',
         action='version',
-        version='conan-config2: 1.0.0',
+        version='conan-config2: 1.1.1',
         help='Show version and exit'
     )
 
