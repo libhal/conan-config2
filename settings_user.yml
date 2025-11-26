@@ -17,4 +17,5 @@ arch:
     "cortex-m85",
   ]
 
+# Obsolete but kept for backwards compatibility
 libc: [null, "default", "custom"]
