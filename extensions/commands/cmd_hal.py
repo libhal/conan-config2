@@ -15,12 +15,12 @@
 # limitations under the License.
 
 import logging
-import os
 import subprocess
+
 from pathlib import Path
-from typing import List, Optional
-from conan.api.conan_api import ConanAPI
+from conan.api.conan_api import ConanAPI, ProfilesAPI, ConfigAPI
 from conan.api.model import Remote
+from conan.errors import ConanException
 from conan.cli.command import conan_command, conan_subcommand
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def hal_setup(conan_api: ConanAPI, parser, subparser, *args):
     REPO = "https://libhal.jfrog.io/artifactory/api/conan/trunk-conan"
     REMOTE_NAME = "libhal"
 
-    logger.info("\n📦 Adding libhal-trunk to conan remotes...")
+    logger.info("📦 Adding libhal-trunk to conan remotes...")
     REPO_REMOTE = Remote(REMOTE_NAME, REPO)
     logger.debug(f"Remote URL: {REPO}")
 
@@ -63,7 +63,23 @@ def hal_setup(conan_api: ConanAPI, parser, subparser, *args):
         logger.error(f"❌ Failed to configure remote: {e}")
         return
 
-    logger.info("\n✅ libhal environment setup complete!")
+    profile_api = ProfilesAPI(conan_api)
+
+    try:
+        # If this succeeds then there is nothing to do. If it fails, then we
+        # should create a default host profile for the user.
+        profile_api.get_default_host()
+        logger.info("✅ System already has a default host profile, proceeding!")
+    except ConanException:
+        logger.info("❌ Default host profile NOT found! Generating one now!")
+        HOME_PATH = Path(ConfigAPI(conan_api).home())
+        DEFAULT_PROFILE_PATH = HOME_PATH / "profiles" / "default"
+        DETECTED_PROFILE_INFO = profile_api.detect()
+        DEFAULT_PROFILE_PATH.write_text(str(DETECTED_PROFILE_INFO))
+        logger.info("✅ Default profile generated!")
+        logger.debug(f"🔍 Profile Contents:\n{DETECTED_PROFILE_INFO}")
+
+    logger.info("✅ libhal environment setup COMPLETE 🚀")
 
 
 @conan_subcommand()
@@ -105,58 +121,6 @@ def hal_update(conan_api: ConanAPI, parser, subparser, *args):
         return 1
 
     return 0
-
-
-@conan_subcommand()
-def hal_new(conan_api: ConanAPI, parser, subparser, *args):
-    """
-    Create a new libhal project, library, platform, or board
-    """
-    subparser.add_argument('type', choices=['project', 'library', 'platform', 'board'],
-                           help='Type of item to create')
-    subparser.add_argument('name', help='Name of the new item')
-    subparser.add_argument('--template', help='Template to use')
-    args = parser.parse_args(*args)
-
-    logger.info(f"Creating new {args.type}: {args.name}")
-    logger.info("TODO: Implement new command")
-
-
-@conan_subcommand()
-def hal_build_matrix(conan_api: ConanAPI, parser, subparser, *args):
-    """
-    Build against multiple architecture/compiler profile combinations
-    """
-
-    subparser.add_argument('path', nargs='?', default='.',
-                           help='Path to build (default: current directory)')
-    subparser.add_argument('--continue-on-error', action='store_true',
-                           help='Continue building remaining profiles if one fails')
-    subparser.add_argument('-j', '--jobs', type=int, default=os.cpu_count(),
-                           help=f'Number of parallel builds (default: {os.cpu_count()})')
-    args = parser.parse_args(*args)
-
-    # The code below will be brought back if suitable use cases arise like
-    # developers wanting to build against all. I'd prefer if the set of build
-    # host targets were defined by the profiles in this conan config rather
-    # than manually generated
-    logger.info("TODO: Implement build matrix command")
-
-    return 0
-
-
-@conan_subcommand()
-def hal_package(conan_api: ConanAPI, parser, subparser, *args):
-    """
-    Create Conan package without deployment
-    """
-    subparser.add_argument('--profile', help='Profile to use')
-    subparser.add_argument('--export', action='store_true',
-                           help='Export to local cache')
-    args = parser.parse_args(*args)
-
-    logger.info("Creating package...")
-    logger.info("TODO: Implement package command")
 
 
 @conan_subcommand()
@@ -210,8 +174,7 @@ def hal(conan_api: ConanAPI, parser, *args):
     parser.epilog = """
 Examples:
   conan hal setup
-  conan hal new project my-robot
-  conan hal flash --binary=app.elf.bin --target=stm32f103c8 --port=/dev/ttyUSB0
+  conan hal update
 
 Use "conan hal <command> --help" for more information on a specific command.
 """
