@@ -5,4 +5,4 @@ compiler.libcxx=libstdc++11
 compiler.version=14
 
 [tool_requires]
-arm-gnu-toolchain/[>=14.0 <15]
+arm-gnu-toolchain/14.3
