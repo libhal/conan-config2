@@ -63,18 +63,16 @@ def hal_setup(conan_api: ConanAPI, parser, subparser, *args):
         logger.error(f"❌ Failed to configure remote: {e}")
         return
 
-    profile_api = ProfilesAPI(conan_api)
-
     try:
         # If this succeeds then there is nothing to do. If it fails, then we
         # should create a default host profile for the user.
-        profile_api.get_default_host()
+        conan_api.profiles.get_default_host()
         logger.info("✅ System already has a default host profile, proceeding!")
     except ConanException:
         logger.info("❌ Default host profile NOT found! Generating one now!")
-        HOME_PATH = Path(ConfigAPI(conan_api).home())
+        HOME_PATH = Path(conan_api.home_folder)
         DEFAULT_PROFILE_PATH = HOME_PATH / "profiles" / "default"
-        DETECTED_PROFILE_INFO = profile_api.detect()
+        DETECTED_PROFILE_INFO = conan_api.profiles.detect()
         DEFAULT_PROFILE_PATH.write_text(str(DETECTED_PROFILE_INFO))
         logger.info("✅ Default profile generated!")
         logger.debug(f"🔍 Profile Contents:\n{DETECTED_PROFILE_INFO}")
