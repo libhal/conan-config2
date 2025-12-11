@@ -1,0 +1,4 @@
+[settings]
+arch={{detect_api.detect_arch()}}
+build_type=Release
+os=Macos

@@ -47,10 +47,23 @@ which will update this command and all of the profiles.
 
 ### Profiles
 
-The configuration includes profiles organized into four categories under
+The configuration includes profiles organized into five categories under
 `profiles/hal/`:
 
-#### 1. **MCU Profiles** (`profiles/hal/mcu/`)
+#### 1. **Bare Metal Profiles** (`profiles/hal/bare/`)
+
+Architecture-specific bare metal profiles for direct hardware targeting without
+an MCU-specific configuration:
+
+- cortex-m0, cortex-m0plus, cortex-m1, cortex-m3, cortex-m4, cortex-m4f
+- cortex-m7, cortex-m7d, cortex-m7f
+- cortex-m23, cortex-m33, cortex-m33f, cortex-m35p, cortex-m35pf
+- cortex-m55, cortex-m85
+
+These profiles set only the architecture and baremetal OS, allowing maximum
+flexibility for custom hardware configurations.
+
+#### 2. **MCU Profiles** (`profiles/hal/mcu/`)
 
 Target-specific profiles for microcontrollers including:
 
@@ -58,7 +71,14 @@ Target-specific profiles for microcontrollers including:
 - **STM32 series**: stm32f103c4, stm32f103c6, stm32f103c8, and more
 - _More series to come..._
 
-#### 2. **Toolchain Profiles** (`profiles/hal/tc/`)
+> [!important]
+> When using MCU profiles, use the `-pr:a` (apply to all) flag instead of `-pr`
+> (host only). This ensures the profile is applied to both build and host
+> contexts, allowing the context-aware logic to properly configure each
+> environment. Using `-pr` would only apply to the host context and miss
+> build-time configuration.
+
+#### 3. **Toolchain Profiles** (`profiles/hal/tc/`)
 
 Compiler toolchain configurations with multiple tiers:
 
@@ -85,20 +105,35 @@ Compiler toolchain configurations with multiple tiers:
 
 See the "Toolchain Version Strategy" section below for guidance on which to use.
 
-#### 3. **BSP Profiles** (`profiles/hal/bsp/`)
+#### 4. **BSP Profiles** (`profiles/hal/bsp/`)
 
 Board Support Package profiles:
 
 - mod-lpc40-v5
 - mod-stm32f1-v4, mod-stm32f1-v5
 
-#### 4. **OS Profiles** (`profiles/hal/os/`)
+> [!important]
+> When using MCU profiles, use the `-pr:a` (apply to all) flag instead of `-pr`
+> (host only). This ensures the profile is applied to both build and host
+> contexts, allowing the context-aware logic to properly configure each
+> environment. Using `-pr` would only apply to the host context and miss
+> build-time configuration.
+
+#### 5. **OS Profiles** (`profiles/hal/os/`)
 
 Host operating system profiles for native development:
 
-- Linux (ARM, x86_64)
-- macOS (ARM, x86_64)
-- Windows (ARM, x86_64)
+**Auto-detecting profiles** (recommended for most users):
+
+- `linux` - Automatically detects your Linux architecture (ARM or x86_64)
+- `mac` - Automatically detects your macOS architecture (ARM or x86_64)
+- `windows` - Automatically detects your Windows architecture (ARM or x86_64)
+
+**Architecture-specific profiles** (for explicit control or cross-compilation):
+
+- `linux_arm`, `linux_x86_64`
+- `mac_arm`, `mac_x86_64`
+- `windows_arm`, `windows_x86_64`
 
 ## Using the Profiles
 
@@ -106,16 +141,22 @@ After installation, you can use these profiles with the `-pr` flags:
 
 ```bash
 # Build for an LPC4078 with latest ARM GCC 14.x available for your platform
-conan install . -pr=hal/mcu/lpc4078 -pr=hal/tc/arm-gcc-14
+conan install . -pr:a=hal/mcu/lpc4078 -pr=hal/tc/arm-gcc-14
 
 # Build for a LPC4078 MicroMod board with specific ARM GCC version
-conan install . -pr=hal/bsp/mod-lpc40-v5 -pr=hal/tc/arm-gcc-14.3
+conan install . -pr:a=hal/bsp/mod-lpc40-v5 -pr=hal/tc/arm-gcc-14
 
-# Native build for your OS using latest LLVM 20.x available
-conan install . -pr=hal/os/linux_x86_64 -pr=hal/tc/llvm-20
+# Build for bare metal Cortex-M85 with current LLVM
+conan install . -pr=hal/bare/cortex-m85 -pr=hal/tc/llvm
 
-# Use current recommended toolchains (currently llvm-20 and arm-gcc-14)
-conan install . -pr=hal/mcu/stm32f103c8 -pr=hal/tc/llvm
+# Native build for your OS with auto-detection using latest LLVM 20.x available
+conan install . -pr=hal/os/linux -pr=hal/tc/llvm-20
+
+# Native build for specific architecture (e.g., cross-compiling for ARM on x86_64)
+conan install . -pr=hal/os/linux_arm -pr=hal/tc/llvm-20
+
+# Use current toolchains
+conan install . -pr:a=hal/mcu/stm32f103c8 -pr=hal/tc/llvm
 ```
 
 ### Toolchain Version Strategy
