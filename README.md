@@ -93,17 +93,22 @@ Compiler toolchain configurations with multiple tiers:
 > the sliding window is being established. These profiles will differentiate as
 > new major versions are released.
 
-**Base version profiles** (auto-select latest minor/patch version):
+**Base version profiles** (auto-detect platform and select latest minor/patch):
 
 - `arm-gcc-14`, `arm-gcc-13` - Major version with automatic minor selection
-- `llvm-20`, `llvm-19` - Major version with automatic minor selection
+- `llvm-20` - Major version with Jinja2 templating for automatic OS/arch detection
 
 **Specific version profiles** (exact version locking):
 
-- **ARM GCC**: 11.3, 12.2, 12.3, 13.2, 13.3, 14.2, 14.3
-- **LLVM**: 19.1.5, 19.1.7, 20.1.8
+- **ARM GCC**: 12.3, 14.2
 
 See the "Toolchain Version Strategy" section below for guidance on which to use.
+
+> [!NOTE]
+> The `llvm-20` profile uses Jinja2 templating with `detect_api` to automatically
+> detect your OS and architecture, configuring both host and build contexts
+> appropriately. This eliminates the need for separate platform-specific LLVM
+> profiles.
 
 #### 4. **BSP Profiles** (`profiles/hal/bsp/`)
 
@@ -140,24 +145,39 @@ Host operating system profiles for native development:
 After installation, you can use these profiles with the `-pr` flags:
 
 ```bash
+# Native build with LLVM (auto-detects your OS and architecture)
+conan build . -pr:a hal/tc/llvm
+
+# Native build with specific OS profile and LLVM
+conan build . -pr:a hal/tc/llvm -pr:h hal/os/linux
+
+# Cross-compile for STM32F103C8 with LLVM
+conan build . -pr:a hal/tc/llvm -pr:h hal/mcu/stm32f103c8
+
+# Cross-compile for bare metal Cortex-M85 with current LLVM
+conan build . -pr:a hal/tc/llvm -pr:h hal/bare/cortex-m85
+
 # Build for an LPC4078 with latest ARM GCC 14.x available for your platform
-conan install . -pr:a=hal/mcu/lpc4078 -pr=hal/tc/arm-gcc-14
+conan build . -pr:h hal/tc/arm-gcc-14 -pr:h hal/mcu/lpc4078
 
-# Build for a LPC4078 MicroMod board with specific ARM GCC version
-conan install . -pr:a=hal/bsp/mod-lpc40-v5 -pr=hal/tc/arm-gcc-14
-
-# Build for bare metal Cortex-M85 with current LLVM
-conan install . -pr=hal/bare/cortex-m85 -pr=hal/tc/llvm
-
-# Native build for your OS with auto-detection using latest LLVM 20.x available
-conan install . -pr=hal/os/linux -pr=hal/tc/llvm-20
-
-# Native build for specific architecture (e.g., cross-compiling for ARM on x86_64)
-conan install . -pr=hal/os/linux_arm -pr=hal/tc/llvm-20
-
-# Use current toolchains
-conan install . -pr:a=hal/mcu/stm32f103c8 -pr=hal/tc/llvm
+# Build for a LPC4078 MicroMod board with ARM GCC
+conan build . -pr:h hal/tc/arm-gcc-14 -pr:h hal/bsp/mod-lpc40-v5
 ```
+
+> [!IMPORTANT]
+> **Profile ordering matters for cross-compilation:** The target profile (e.g.,
+> `hal/mcu/stm32f103c8` or `hal/bare/cortex-m85`) must come **after** the
+> toolchain profile (`hal/tc/llvm`). Conan processes profiles in order, and
+> later profiles override earlier ones. Placing the target profile last ensures
+> its settings (like `os=baremetal` and the target architecture) take precedence
+> over the auto-detected host settings.
+
+> [!NOTE]
+> **LLVM profiles require `-pr:a` for full functionality:** The `llvm-20`
+> profile uses Jinja2 templating to configure both host and build contexts.
+> Using `-pr:a` (apply to all) ensures that both contexts are configured with
+> the LLVM toolchain, which is necessary if you want to build tools (like ninja
+> or cmake) from source using the LLVM compiler for your build platform.
 
 ### Toolchain Version Strategy
 
@@ -167,12 +187,11 @@ conan install . -pr:a=hal/mcu/stm32f103c8 -pr=hal/tc/llvm
 ranges to automatically select the latest available minor/patch version for your
 target platform:
 
-- ARM Cortex-M targets might get 20.1.5 while x86_64 gets 20.1.8
 - You automatically benefit from new minor versions without profile changes
 - Recommended for most development workflows
+- `llvm-20` uses Jinja2 templating to auto-detect your OS and architecture
 
-**Specific version profiles** (e.g., `arm-gcc-14.3`, `llvm-20.1.8`) lock to
-exact versions:
+**Specific version profiles** (e.g., `arm-gcc-14.2`) lock to exact versions:
 
 - Use when you need reproducible builds across all platforms
 - Useful for CI/CD pipelines or release builds
