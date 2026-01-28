@@ -84,31 +84,35 @@ Compiler toolchain configurations with multiple tiers:
 
 **Sliding window profiles** (for prebuilt binary compatibility):
 
-- `llvm`, `arm-gcc` - Current recommended stable version
-- `llvm-prev`, `arm-gcc-prev` - Previous major version (extended support)
-- `llvm-next`, `arm-gcc-next` - Next major version (early adopter)
+- `llvm`, `gcc` - Current recommended stable version
+- `llvm-prev`, `gcc-prev` - Previous major version (extended support)
+- `llvm-next`, `gcc-next` - Next major version (early adopter)
 
 > [!note]
-> Currently all three point to the same version (llvm-20, arm-gcc-14) as
+> Currently all three point to the same version (llvm-20, gcc-14) as
 > the sliding window is being established. These profiles will differentiate as
 > new major versions are released.
 
 **Base version profiles** (auto-detect platform and select latest minor/patch):
 
-- `arm-gcc-14`, `arm-gcc-13` - Major version with automatic minor selection
+- `gcc-14` - Major version with Jinja2 templating for automatic OS/arch detection
 - `llvm-20` - Major version with Jinja2 templating for automatic OS/arch detection
-
-**Specific version profiles** (exact version locking):
-
-- **ARM GCC**: 12.3, 14.2
 
 See the "Toolchain Version Strategy" section below for guidance on which to use.
 
 > [!NOTE]
-> The `llvm-20` profile uses Jinja2 templating with `detect_api` to automatically
-> detect your OS and architecture, configuring both host and build contexts
-> appropriately. This eliminates the need for separate platform-specific LLVM
+> The `llvm-20` and `gcc-14` profiles use Jinja2 templating with `detect_api` to
+> automatically detect your OS and architecture, configuring both host and build
+> contexts appropriately. This eliminates the need for separate platform-specific
 > profiles.
+>
+> [!WARNING]
+> **ARM GCC profiles are deprecated.** The `arm-gcc`, `arm-gcc-prev`,
+> `arm-gcc-next`, and version-specific `arm-gcc-*` profiles are deprecated in
+> favor of the new multiarch `gcc` profiles. The new `gcc` profiles use the
+> `multiarch-gnu-toolchain` package which supports multiple target architectures
+> from a single installation. Please migrate to `gcc`, `gcc-prev`, `gcc-next`,
+> or `gcc-14` profiles.
 
 #### 4. **BSP Profiles** (`profiles/hal/bsp/`)
 
@@ -157,11 +161,11 @@ conan build . -pr:a hal/tc/llvm -pr:h hal/mcu/stm32f103c8
 # Cross-compile for bare metal Cortex-M85 with current LLVM
 conan build . -pr:a hal/tc/llvm -pr:h hal/bare/cortex-m85
 
-# Build for an LPC4078 with latest ARM GCC 14.x available for your platform
-conan build . -pr:h hal/tc/arm-gcc-14 -pr:h hal/mcu/lpc4078
+# Build for an LPC4078 with latest GCC 14.x available for your platform
+conan build . -pr:a hal/tc/gcc-14 -pr:h hal/mcu/lpc4078
 
-# Build for a LPC4078 MicroMod board with ARM GCC
-conan build . -pr:h hal/tc/arm-gcc-14 -pr:h hal/bsp/mod-lpc40-v5
+# Build for a LPC4078 MicroMod board with GCC
+conan build . -pr:a hal/tc/gcc-14 -pr:h hal/bsp/mod-lpc40-v5
 ```
 
 > [!IMPORTANT]
@@ -173,17 +177,17 @@ conan build . -pr:h hal/tc/arm-gcc-14 -pr:h hal/bsp/mod-lpc40-v5
 > over the auto-detected host settings.
 
 > [!NOTE]
-> **LLVM profiles require `-pr:a` for full functionality:** The `llvm-20`
-> profile uses Jinja2 templating to configure both host and build contexts.
-> Using `-pr:a` (apply to all) ensures that both contexts are configured with
-> the LLVM toolchain, which is necessary if you want to build tools (like ninja
-> or cmake) from source using the LLVM compiler for your build platform.
+> **Toolchain profiles require `-pr:a` for full functionality:** The `llvm-20`
+> and `gcc-14` profiles use Jinja2 templating to configure both host and build
+> contexts. Using `-pr:a` (apply to all) ensures that both contexts are
+> configured with the toolchain, which is necessary if you want to build tools
+> (like ninja or cmake) from source using the compiler for your build platform.
 
 ### Toolchain Version Strategy
 
 #### Base vs Specific Versions
 
-**Base version profiles** (e.g., `arm-gcc-14`, `llvm-20`) use Conan version
+**Base version profiles** (e.g., `gcc-14`, `llvm-20`) use Conan version
 ranges to automatically select the latest available minor/patch version for your
 target platform:
 
@@ -191,22 +195,16 @@ target platform:
 - Recommended for most development workflows
 - `llvm-20` uses Jinja2 templating to auto-detect your OS and architecture
 
-**Specific version profiles** (e.g., `arm-gcc-14.2`) lock to exact versions:
-
-- Use when you need reproducible builds across all platforms
-- Useful for CI/CD pipelines or release builds
-- Pair with `conan lock` for complete dependency locking
-
 #### Prebuilt Binary Support & Sliding Window
 
 libhal maintains prebuilt binaries for a **sliding window of compiler**
 **versions** to balance resource usage with backward compatibility:
 
-- **`llvm`/`arm-gcc`**: Current recommended stable version (e.g., llvm-20,
-  arm-gcc-14)
-- **`llvm-prev`/`arm-gcc-prev`**: Previous major version (coming soon - ensures
+- **`llvm`/`gcc`**: Current recommended stable version (e.g., llvm-20,
+  gcc-14)
+- **`llvm-prev`/`gcc-prev`**: Previous major version (coming soon - ensures
   users on older versions continue getting prebuilts)
-- **`llvm-next`/`arm-gcc-next`**: Next major version (coming soon - for early
+- **`llvm-next`/`gcc-next`**: Next major version (coming soon - for early
   adopters testing upcoming compilers)
 
 Prebuilts are built against these three profiles. Users on specific base
@@ -228,23 +226,20 @@ ages out of the window, at which point we'll provide migration notices.
 
 **For application/project development:**
 
-- Use **current version profiles** (e.g., `llvm`, `arm-gcc`) to ensure
+- Use **current version profiles** (e.g., `llvm`, `gcc`) to ensure
   maximum compatibility with libhal ecosystem libraries (recommended - all
   prebuilts available)
-- Use **base version profiles** (e.g., `llvm-20`, `arm-gcc-14`) for stability
+- Use **base version profiles** (e.g., `llvm-20`, `gcc-14`) for stability
   within a major version while getting minor updates (some libraries may
   require building from source)
-- Use **specific versions** (e.g., `llvm-20.1.8`) for complete reproducibility
-  in production/release builds (imported libraries will likely require building
-  from source)
 
 **For library development or staying current:**
 
-- Use **`llvm`/`arm-gcc`** to always track the currently recommended stable
+- Use **`llvm`/`gcc`** to always track the currently recommended stable
   version
-- Use **`llvm-next`/`arm-gcc-next`** to test compatibility with upcoming
+- Use **`llvm-next`/`gcc-next`** to test compatibility with upcoming
   versions
-- Use **`llvm-prev`/`arm-gcc-prev`** if you need extra time before upgrading
+- Use **`llvm-prev`/`gcc-prev`** if you need extra time before upgrading
   (note: this will eventually auto-upgrade when the window slides)
 
 > [!important]
