@@ -98,14 +98,13 @@ Compiler toolchain configurations with multiple tiers:
 - `gcc-14` - Major version with Jinja2 templating for automatic OS/arch detection
 - `llvm-20` - Major version with Jinja2 templating for automatic OS/arch detection
 
+The `llvm-20` and `gcc-14` profiles use Jinja2 templating with `detect_api` to
+automatically detect your OS and architecture, configuring both host and build
+contexts appropriately. This eliminates the need for separate platform-specific
+profiles.
+
 See the "Toolchain Version Strategy" section below for guidance on which to use.
 
-> [!NOTE]
-> The `llvm-20` and `gcc-14` profiles use Jinja2 templating with `detect_api` to
-> automatically detect your OS and architecture, configuring both host and build
-> contexts appropriately. This eliminates the need for separate platform-specific
-> profiles.
->
 > [!WARNING]
 > **ARM GCC profiles are deprecated.** The `arm-gcc`, `arm-gcc-prev`,
 > `arm-gcc-next`, and version-specific `arm-gcc-*` profiles are deprecated in
