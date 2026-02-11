@@ -34,6 +34,32 @@ Set up your libhal development environment by configuring remotes and installing
 1. Adds/updates the `libhal` remote repository
 2. Generates and installs default system profile if it does not already exist.
 
+#### `conan hal docs`
+
+Generate API documentation using Doxygen and Sphinx. By default, looks for a
+`docs/` directory in the current working directory. The docs directory must
+contain a `doxygen.conf` and Sphinx `conf.py`.
+
+```bash
+# Generate docs (expects ./docs/ in current directory)
+conan hal docs
+
+# Generate and open in browser
+conan hal docs --open
+
+# Generate with a specific version label (for CI/deployment)
+conan hal docs --version 1.0.0
+
+# Specify a custom docs directory path
+conan hal docs path/to/docs
+```
+
+**Prerequisites:**
+
+- `doxygen` installed on your system
+- Python packages from `docs/requirements.txt` installed
+  (`python3 -m pip install -r docs/requirements.txt`)
+
 #### `conan hal update`
 
 This is a short hand for the conan config install command above. This will
