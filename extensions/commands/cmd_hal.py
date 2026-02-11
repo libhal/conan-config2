@@ -16,9 +16,10 @@
 
 import logging
 import subprocess
+import os
 
 from pathlib import Path
-from conan.api.conan_api import ConanAPI, ProfilesAPI, ConfigAPI
+from conan.api.conan_api import ConanAPI
 from conan.api.model import Remote
 from conan.errors import ConanException
 from conan.cli.command import conan_command, conan_subcommand
@@ -117,6 +118,124 @@ def hal_update(conan_api: ConanAPI, parser, subparser, *args):
     except Exception as e:
         logger.error(f"❌ Error during update: {e}")
         return 1
+
+    return 0
+
+
+@conan_subcommand()
+def hal_docs(conan_api: ConanAPI, parser, subparser, *args):
+    """
+    Generate API documentation using Doxygen and Sphinx
+    """
+    subparser.add_argument('--version',
+                           default='local',
+                           help='Version label for the docs (default: local)')
+    subparser.add_argument('--open', action='store_true',
+                           help='Open the generated docs in a browser')
+    subparser.add_argument(
+        'docs_dir', nargs='?', default=Path.cwd() / "docs", type=Path,
+        help='Path to docs directory containing doxygen.conf and sphinx conf.py')
+    args = parser.parse_args(*args)
+
+    DOCS_DIR = args.docs_dir.resolve()
+
+    if not DOCS_DIR.exists():
+        logger.error(f"❌ No {DOCS_DIR} directory found")
+        return 1
+
+    doxygen_conf = DOCS_DIR / "doxygen.conf"
+    if not doxygen_conf.exists():
+        logger.error("❌ No docs/doxygen.conf found")
+        return 1
+
+    # Check for doxygen
+    try:
+        subprocess.run(["doxygen", "--version"],
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE,
+                       check=True)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        logger.error("❌ doxygen is not installed")
+        logger.error("""
+    Install with:
+
+    macOS:    brew install doxygen
+    Ubuntu:   sudo apt install doxygen
+    Windows:  winget install -e --id DimitriVanHeesch.Doxygen
+""")
+
+        return 1
+
+    # Check for sphinx-build
+    try:
+        subprocess.run(["sphinx-build", "--version"],
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE,
+                       check=True)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        logger.error("❌ sphinx-build is not installed")
+        logger.error("""
+  Install the requirements via:
+
+      python3 -m pip install -r docs/requirements.txt
+""")
+        return 1
+
+    version_label = args.version
+    output_dir = DOCS_DIR / "build" / version_label
+
+    # Step 1: Run doxygen from docs/
+    logger.info("📄 Running doxygen...")
+    try:
+        result = subprocess.run(["doxygen", "doxygen.conf"],
+                                cwd=str(DOCS_DIR),
+                                timeout=120)
+        if result.returncode != 0:
+            logger.error("❌ Doxygen failed")
+            return 1
+        logger.info("✅ Doxygen XML generated")
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Doxygen timed out")
+        return 1
+
+    # Step 2: Run sphinx-build from docs/
+    logger.info("📚 Running sphinx-build...")
+    env = {**os.environ, "LIBHAL_API_VERSION": version_label}
+    if version_label == "local":
+        env["LIBHAL_LOCAL_BUILD"] = "1"
+    try:
+        result = subprocess.run(
+            ["sphinx-build", "-b", "html", ".", str(output_dir)],
+            cwd=str(DOCS_DIR),
+            env=env,
+            timeout=120)
+        if result.returncode != 0:
+            logger.error("❌ Sphinx build failed")
+            logger.error("""
+  If you see an error like:
+
+      Extension error:
+      Could not import extension breathe (exception: No module named 'breathe')
+
+  Then you need to install the docs requirements:
+
+      python3 -m pip install -r docs/requirements.txt
+""")
+            return 1
+        logger.info(f"✅ Documentation generated at: {output_dir}")
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Sphinx build timed out")
+        return 1
+
+    # Step 3: Optionally open in browser
+    if args.open:
+        import webbrowser
+        index_file = output_dir / "index.html"
+        if index_file.exists():
+            webbrowser.open(f"file://{index_file}")
+            logger.info("🌐 Opened docs in browser")
+        else:
+            logger.error("❌ index.html not found in output")
 
     return 0
 
