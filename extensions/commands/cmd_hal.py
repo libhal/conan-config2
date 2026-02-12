@@ -127,7 +127,7 @@ def hal_docs(conan_api: ConanAPI, parser, subparser, *args):
     """
     Generate API documentation using Doxygen and Sphinx
     """
-    subparser.add_argument('--version',
+    subparser.add_argument('--doc_version',
                            default='local',
                            help='Version label for the docs (default: local)')
     subparser.add_argument('--open', action='store_true',
@@ -181,8 +181,8 @@ def hal_docs(conan_api: ConanAPI, parser, subparser, *args):
 """)
         return 1
 
-    version_label = args.version
-    output_dir = DOCS_DIR / "build" / version_label
+    VERSION_LABEL = args.doc_version
+    output_dir = DOCS_DIR / "build" / VERSION_LABEL
 
     # Step 1: Run doxygen from docs/
     logger.info("📄 Running doxygen...")
@@ -200,8 +200,8 @@ def hal_docs(conan_api: ConanAPI, parser, subparser, *args):
 
     # Step 2: Run sphinx-build from docs/
     logger.info("📚 Running sphinx-build...")
-    env = {**os.environ, "LIBHAL_API_VERSION": version_label}
-    if version_label == "local":
+    env = {**os.environ, "LIBHAL_API_VERSION": VERSION_LABEL}
+    if VERSION_LABEL == "local":
         env["LIBHAL_LOCAL_BUILD"] = "1"
     try:
         result = subprocess.run(

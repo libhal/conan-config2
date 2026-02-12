@@ -48,7 +48,7 @@ conan hal docs
 conan hal docs --open
 
 # Generate with a specific version label (for CI/deployment)
-conan hal docs --version 1.0.0
+conan hal docs --doc_version 1.0.0
 
 # Specify a custom docs directory path
 conan hal docs path/to/docs
