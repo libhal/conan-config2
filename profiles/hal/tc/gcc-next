@@ -1,1 +1,1 @@
-include(gcc-14)
+include(gcc-15)
